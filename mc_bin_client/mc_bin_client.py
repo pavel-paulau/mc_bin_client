@@ -8,22 +8,25 @@ import hmac
 import socket
 import random
 import struct
-import exceptions
+import sys
 
-from memcacheConstants import REQ_MAGIC_BYTE, RES_MAGIC_BYTE
-from memcacheConstants import REQ_PKT_FMT, RES_PKT_FMT, MIN_RECV_PACKET
-from memcacheConstants import SET_PKT_FMT, INCRDECR_RES_FMT
-import memcacheConstants
+from mc_bin_client.memcacheConstants import REQ_MAGIC_BYTE, RES_MAGIC_BYTE
+from mc_bin_client.memcacheConstants import REQ_PKT_FMT, RES_PKT_FMT, MIN_RECV_PACKET
+from mc_bin_client.memcacheConstants import SET_PKT_FMT, INCRDECR_RES_FMT
+from mc_bin_client import memcacheConstants
+
+if sys.version_info < (3, ):
+    from exceptions import Exception, EOFError
 
 
-class MemcachedError(exceptions.Exception):
+class MemcachedError(Exception):
     """Error raised when a command fails."""
 
     def __init__(self, status, msg):
         supermsg = 'Memcached error #' + repr(status)
         if msg:
             supermsg += ":  " + msg
-        exceptions.Exception.__init__(self, supermsg)
+        Exception.__init__(self, supermsg)
 
         self.status = status
         self.msg = msg
@@ -70,7 +73,7 @@ class MemcachedClient(object):
         while len(response) < MIN_RECV_PACKET:
             data = self.s.recv(MIN_RECV_PACKET - len(response))
             if data == '':
-                raise exceptions.EOFError("Got empty data (remote died?).")
+                raise EOFError("Got empty data (remote died?).")
             response += data
         assert len(response) == MIN_RECV_PACKET
         magic, cmd, keylen, extralen, dtype, errcode, remaining, opaque, cas =\
@@ -80,7 +83,7 @@ class MemcachedClient(object):
         while remaining > 0:
             data = self.s.recv(remaining)
             if data == '':
-                raise exceptions.EOFError("Got empty data (remote died?).")
+                raise EOFError("Got empty data (remote died?).")
             rv += data
             remaining -= len(data)
 
@@ -275,7 +278,7 @@ class MemcachedClient(object):
         """Start a plan auth session."""
         try:
             self.sasl_auth_start('CRAM-MD5', '')
-        except MemcachedError, e:
+        except MemcachedError as e:
             if e.status != memcacheConstants.ERR_AUTH_CONTINUE:
                 raise
             challenge = e.msg
@@ -322,7 +325,7 @@ class MemcachedClient(object):
         opaqued = dict(enumerate(keys))
         terminal = len(opaqued) + 10
         # Send all of the keys in quiet
-        for k, v in opaqued.iteritems():
+        for k, v in opaqued.items():
             self._sendCmd(memcacheConstants.CMD_GETQ, v, '', k)
 
         self._sendCmd(memcacheConstants.CMD_NOOP, '', '', terminal)
@@ -346,14 +349,14 @@ class MemcachedClient(object):
 
         # If this is a dict, convert it to a pair generator
         if hasattr(items, 'iteritems'):
-            items = items.iteritems()
+            items = items.items()
 
         opaqued = dict(enumerate(items))
         terminal = len(opaqued) + 10
         extra = struct.pack(SET_PKT_FMT, flags, exp)
 
         # Send all of the keys in quiet
-        for opaque, kv in opaqued.iteritems():
+        for opaque, kv in opaqued.items():
             self._sendCmd(memcacheConstants.CMD_SETQ, kv[0], kv[1], opaque,
                           extra)
 
@@ -366,7 +369,7 @@ class MemcachedClient(object):
             try:
                 opaque, cas, data = self._handleSingleResponse(None)
                 done = opaque == terminal
-            except MemcachedError, e:
+            except MemcachedError as e:
                 failed.append(e)
 
         return failed
@@ -381,7 +384,7 @@ class MemcachedClient(object):
         extra = ''
 
         # Send all of the keys in quiet
-        for opaque, k in opaqued.iteritems():
+        for opaque, k in opaqued.items():
             self._sendCmd(memcacheConstants.CMD_DELETEQ, k, '', opaque, extra)
 
         self._sendCmd(memcacheConstants.CMD_NOOP, '', '', terminal)
@@ -393,7 +396,7 @@ class MemcachedClient(object):
             try:
                 opaque, cas, data = self._handleSingleResponse(None)
                 done = opaque == terminal
-            except MemcachedError, e:
+            except MemcachedError as e:
                 failed.append(e)
 
         return failed
